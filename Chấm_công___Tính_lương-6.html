@@ -1,0 +1,1889 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chấm công & Tính lương</title>
+    <script src="https://www.gstatic.com/firebasejs/12.18.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/12.18.0/firebase-database-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/12.18.0/firebase-auth-compat.js"></script>
+    <style>
+        :root {
+            --primary: #0d9488;
+            --primary-soft: #ccfbf1;
+            --accent: #f59e0b;
+            --head: #0f172a;
+            --head-bg: #f1f5f9;
+            --text: #334155;
+            --border: #cbd5e1;
+            --bg: #ffffff;
+            --danger: #ef4444;
+            --danger-hover: #dc2626;
+            --danger-soft: #fef2f2;
+            --warning-soft: #fffbeb;
+            --success: #16a34a;
+            --success-soft: #dcfce7;
+            --info-soft: #eff6ff;
+            font-family: 'Segoe UI', system-ui, sans-serif;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background: #f8fafc;
+            color: var(--text);
+            padding: 24px;
+            max-width: 1100px;
+            margin: auto;
+        }
+
+        h2, h3 {
+            color: var(--head);
+            margin: 20px 0 12px;
+        }
+
+        .card {
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+        }
+
+        .person-header {
+            display: flex;
+            flex-direction: column;
+            cursor: pointer;
+            user-select: none;
+            padding: 4px 0;
+            border-radius: 8px;
+        }
+        .person-header:hover {
+            background: var(--primary-soft);
+        }
+        .toggle-arrow {
+            display: inline-block;
+            width: 16px;
+            font-size: 0.9rem;
+            color: var(--head);
+        }
+        .person-summary {
+            font-weight: 700;
+            color: #16a34a;
+            font-size: 0.95rem;
+        }
+        .person-body {
+            margin-top: 8px;
+        }
+        .sub-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+            user-select: none;
+            padding: 8px 4px;
+            margin-top: 10px;
+            border-radius: 6px;
+            font-weight: 700;
+            color: var(--head);
+            background: var(--head-bg);
+        }
+        .sub-header:hover {
+            background: var(--primary-soft);
+        }
+        .sub-body {
+            margin-top: 6px;
+        }
+
+        .flex-row {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        label {
+            font-weight: 600;
+            font-size: 0.9rem;
+            margin-right: 4px;
+            white-space: nowrap;
+        }
+
+        input, select {
+            padding: 6px 10px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            font: inherit;
+            background: var(--bg);
+        }
+        input:focus, select:focus {
+            outline: 2px solid var(--primary);
+            outline-offset: -1px;
+        }
+
+        button {
+            padding: 8px 16px;
+            border-radius: 8px;
+            border: none;
+            font-weight: 600;
+            cursor: pointer;
+            background: var(--primary);
+            color: white;
+            font-size: 0.9rem;
+            transition: 0.15s;
+        }
+        button:hover { opacity: 0.9; }
+        button.small { padding: 4px 10px; font-size: 0.8rem; }
+        button.danger { background: var(--danger); }
+        button.danger:hover { background: var(--danger-hover); }
+        button.success { background: var(--success); }
+        button.success:hover { background: #15803d; }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9rem;
+        }
+        th {
+            background: var(--head-bg);
+            color: var(--head);
+            font-weight: 700;
+            padding: 10px 6px;
+            text-align: center;
+            border-bottom: 2px solid var(--border);
+            white-space: nowrap;
+        }
+
+        /* Khung cuộn riêng cho bảng chấm công: cuộn cả ngang lẫn dọc BÊN TRONG khung này,
+           để việc ghim (sticky) đầu bảng / cuối bảng / cột Ngày tính đúng theo khung cuộn này,
+           không bị lỗi do overflow-x:auto một chiều ép cả trang thành khung cuộn ảo. */
+        .hour-cell {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+        }
+        .hour-cell input {
+            width: 46px;
+            text-align: center;
+            padding: 6px 2px;
+        }
+        .half-btn {
+            flex-shrink: 0;
+            padding: 4px 6px;
+            font-size: 0.7rem;
+            border-radius: 5px;
+            border: 1px solid var(--border);
+            background: var(--primary-soft);
+            color: var(--head);
+            cursor: pointer;
+            white-space: nowrap;
+        }
+        .half-btn:active {
+            background: var(--primary);
+            color: #fff;
+        }
+
+        .timesheet-table.hide-night th:nth-child(3),
+        .timesheet-table.hide-night td:nth-child(3),
+        .timesheet-table.hide-night th:nth-child(5),
+        .timesheet-table.hide-night td:nth-child(5) {
+            display: none;
+        }
+
+        .menu-toggle-btn {
+            padding: 8px 14px;
+            font-size: 1.1rem;
+            border-radius: 6px;
+            border: 1px solid #cbd5e1;
+            background: #f1f5f9;
+            cursor: pointer;
+        }
+        .dropdown-menu {
+            display: none;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            width: 100%;
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px dashed var(--border);
+        }
+        .dropdown-menu.open {
+            display: grid;
+        }
+        .dropdown-menu button {
+            border: 1px solid #334155;
+            background: #1e293b;
+            color: #fff;
+            text-align: left;
+            padding: 10px 12px;
+            font-size: 13px;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+        .dropdown-menu button:hover {
+            background: #334155;
+        }
+        .dropdown-menu button.danger {
+            background: #7f1d1d;
+            border-color: #991b1b;
+            color: #fff;
+        }
+        .dropdown-menu button.danger:hover {
+            background: #991b1b;
+        }
+
+        .month-calendar-wrap {
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            margin-top: 12px;
+            padding: 8px;
+        }
+        table.month-calendar-grid {
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: fixed;
+        }
+        table.month-calendar-grid th {
+            padding: 6px 2px;
+            text-align: center;
+            font-size: 0.75rem;
+            font-weight: 700;
+            color: var(--muted);
+        }
+        table.month-calendar-grid th.weekend-col {
+            color: #dc2626;
+        }
+        table.month-calendar-grid td {
+            text-align: center;
+            padding: 6px 2px;
+            font-size: 0.85rem;
+            border-radius: 6px;
+        }
+        table.month-calendar-grid td.weekend-day {
+            color: #dc2626;
+            font-weight: 700;
+        }
+        table.month-calendar-grid td.empty-day {
+            color: transparent;
+        }
+        table.month-calendar-grid td.today-cell {
+            background: var(--primary);
+            color: #fff !important;
+            font-weight: 700;
+        }
+        table.month-calendar-grid td.checked-cell {
+            background: #bbf7d0;
+            font-weight: 700;
+        }
+        table.month-calendar-grid td.holiday-cell {
+            background: #7f1d1d !important;
+            color: #fff !important;
+            font-weight: 700;
+        }
+        table.month-calendar-grid td.holiday-partial-cell {
+            background: #fb923c !important;
+            color: #fff !important;
+            font-weight: 700;
+        }
+        table.month-calendar-grid td[data-date] {
+            cursor: pointer;
+        }
+        table.month-calendar-grid td[data-date]:active {
+            opacity: 0.7;
+        }
+
+        .holiday-modal {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 100;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .holiday-modal-box {
+            background: #fff;
+            border-radius: 12px;
+            padding: 20px;
+            max-width: 360px;
+            width: 100%;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        .holiday-modal-box h3 {
+            margin-bottom: 4px;
+        }
+        .holiday-check-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 4px;
+            border-bottom: 1px solid #f1f5f9;
+            font-size: 14px;
+            cursor: pointer;
+        }
+        .holiday-check-row input {
+            width: 18px;
+            height: 18px;
+        }
+        .holiday-modal-actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 16px;
+        }
+        .holiday-modal-actions button {
+            flex: 1;
+            font-size: 12px;
+            padding: 10px 6px;
+        }
+
+        .timesheet-scroll {
+            overflow: auto;
+            max-height: 480px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+        }
+        .timesheet-table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0;
+        }
+        .timesheet-table thead th {
+            position: sticky;
+            top: 0;
+            z-index: 3;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+        }
+        .timesheet-table tfoot td {
+            position: sticky;
+            bottom: 0;
+            z-index: 3;
+            background: var(--primary-soft);
+            font-weight: 700;
+            color: var(--head);
+            border-top: 2px solid var(--border);
+            box-shadow: 0 -2px 4px rgba(0,0,0,0.08);
+        }
+        /* Ghim cột Ngày bên trái */
+        .timesheet-table td.date-cell {
+            position: sticky;
+            left: 0;
+            z-index: 2;
+        }
+        /* Ô góc trên-trái (tiêu đề "Ngày") và góc dưới-trái (nhãn "TỔNG") phải ghim CẢ 2 chiều,
+           nên cần z-index cao nhất để luôn nổi trên các phần ghim khác. */
+        .timesheet-table thead th:first-child {
+            position: sticky;
+            top: 0;
+            left: 0;
+            z-index: 4;
+        }
+        .timesheet-table tfoot td:first-child {
+            position: sticky;
+            bottom: 0;
+            left: 0;
+            z-index: 4;
+        }
+        td {
+            padding: 6px 4px;
+            text-align: center;
+            border-bottom: 1px solid var(--border);
+        }
+        tbody td input {
+            width: 100%;
+            border: none;
+            text-align: center;
+            font: inherit;
+            padding: 3px;
+            background: transparent;
+            color: var(--text);
+        }
+        tbody td input:focus {
+            outline: 1px solid var(--primary);
+            background: #f0fdfa;
+        }
+        tbody tr:nth-child(even) td {
+            background: #f8fafc;
+        }
+        td.date-cell {
+            min-width: 78px;
+            text-align: center;
+            font-weight: 600;
+            color: var(--head);
+            background: var(--head-bg);
+            font-size: 0.8rem;
+            line-height: 1.4;
+        }
+        .date-cell .date-weekday {
+            font-weight: 700;
+        }
+        .date-cell .date-full {
+            font-size: 0.75rem;
+            font-weight: 500;
+            opacity: 0.85;
+        }
+        .weekend td {
+            background: #fef2f2 !important;
+        }
+        .weekend td.date-cell {
+            color: #dc2626;
+            background: #fef2f2 !important;
+        }
+        .holiday-row td {
+            background: #fee2e2 !important;
+            opacity: 0.75;
+        }
+        .holiday-row td.date-cell {
+            color: #7f1d1d;
+            font-weight: 700;
+        }
+        .day-input:disabled, .half-btn:disabled {
+            cursor: not-allowed;
+            background: #f1f5f9;
+            color: #94a3b8;
+        }
+        .result {
+            margin-top: 16px;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        .result table td {
+            text-align: right;
+            padding: 8px 12px;
+        }
+        .result table td:first-child {
+            text-align: left;
+            font-weight: 600;
+        }
+        .result table td input {
+            width: 100%;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            padding: 4px 8px;
+            text-align: right;
+            font: inherit;
+            background: var(--bg);
+        }
+        .result table td input:focus {
+            outline: 2px solid var(--primary);
+            outline-offset: -1px;
+        }
+
+        .night-detail-row td {
+            background: #eff6ff;
+            font-weight: 600;
+            color: #1e40af;
+        }
+
+        .name-input {
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: var(--head);
+            border: none;
+            border-bottom: 2px dashed var(--border);
+            padding: 4px 8px;
+            background: transparent;
+            width: 250px;
+        }
+        .name-input:focus {
+            border-bottom-color: var(--primary);
+            outline: none;
+            background: #f0fdfa;
+        }
+
+        .allowance-row td {
+            background: #fffbeb;
+        }
+        .allowance-row td:first-child input {
+            text-align: left;
+        }
+
+        .deduction {
+            margin-top: 16px;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        .deduction h4 {
+            background: var(--danger-soft);
+            color: var(--danger);
+            padding: 10px 16px;
+            margin: 0;
+            font-size: 0.95rem;
+        }
+        .deduction table {
+            table-layout: fixed;
+        }
+        .deduction table td {
+            text-align: right;
+            padding: 8px 10px;
+            word-wrap: break-word;
+            white-space: normal;
+        }
+        .deduction table td:first-child {
+            text-align: left;
+            font-weight: 600;
+            width: 45%;
+        }
+        .deduction table td:nth-child(2) {
+            width: 20%;
+            text-align: center;
+        }
+        .deduction table td:last-child {
+            width: 35%;
+        }
+        .deduction table td input {
+            width: 100%;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            padding: 6px 8px;
+            text-align: center;
+            font: inherit;
+            background: var(--bg);
+        }
+        .deduction table td input:focus {
+            outline: 2px solid var(--primary);
+            outline-offset: -1px;
+        }
+        .deduction-row td {
+            background: #fff5f5;
+        }
+        .deduction-subtotal td {
+            background: #fef2f2;
+            font-weight: 700;
+            color: var(--danger);
+            border-top: 2px solid var(--danger);
+        }
+        .tax-row td {
+            background: #fff7ed;
+            font-weight: 600;
+            color: #c2410c;
+        }
+
+        .other-deduction-row td {
+            background: #fefce8;
+        }
+        .other-deduction-row td:first-child input {
+            width: 100%;
+            text-align: left;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            padding: 6px 8px;
+            font: inherit;
+            background: var(--bg);
+            white-space: normal;
+            word-wrap: break-word;
+        }
+        .other-deduction-row td:last-child input {
+            width: 100%;
+            text-align: right;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            padding: 6px 8px;
+            font: inherit;
+            background: var(--bg);
+        }
+
+        .total-deduction-row td {
+            background: #fef2f2;
+            font-weight: 800;
+            color: var(--danger);
+            border-top: 2px solid var(--danger);
+            font-size: 0.95rem;
+            white-space: normal;
+            word-wrap: break-word;
+        }
+
+        .net-salary td {
+            background: var(--primary-soft);
+            font-weight: 800;
+            color: var(--primary);
+            font-size: 1.05rem;
+        }
+
+        .currency-badge {
+            background: var(--primary-soft);
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-weight: 700;
+            color: var(--primary);
+        }
+
+        .sync-status {
+            font-size: 0.8rem;
+            font-weight: 600;
+            padding: 4px 10px;
+            border-radius: 12px;
+            margin-left: 8px;
+        }
+        .sync-status.ok { background: var(--success-soft); color: var(--success); }
+        .sync-status.loading { background: var(--warning-soft); color: var(--accent); }
+        .sync-status.error { background: var(--danger-soft); color: var(--danger); }
+
+        /* Ô ngày công đã nhập số liệu -> in đậm để dễ theo dõi */
+        .day-input.has-value {
+            font-weight: 800;
+            color: var(--head);
+        }
+
+        /* Input cần xác nhận trước khi sửa: khi đang khóa (readonly) hiện con trỏ tay + nền xám nhẹ */
+        .confirm-input[readonly] {
+            cursor: pointer;
+            background-color: #eef2f7 !important;
+        }
+        .confirm-input:not([readonly]) {
+            cursor: text;
+        }
+
+        .grand-total-card {
+            background: linear-gradient(135deg, var(--primary) 0%, #0f766e 100%);
+            border-radius: 12px;
+            padding: 20px 24px;
+            margin-bottom: 20px;
+            color: white;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+        }
+        .grand-total-card .label {
+            font-size: 1rem;
+            font-weight: 700;
+        }
+        .grand-total-card .value {
+            font-size: 1.6rem;
+            font-weight: 800;
+        }
+
+        .toast {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: var(--success);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-weight: 600;
+            z-index: 9999;
+            animation: slideIn 0.3s ease, fadeOut 0.5s 2s forwards;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        .toast.error { background: var(--danger); }
+        @keyframes slideIn {
+            from { transform: translateX(100px); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        @keyframes fadeOut {
+            from { opacity: 1; }
+            to { opacity: 0; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Màn hình đăng nhập -->
+    <div id="loginScreen" style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:80vh; gap:16px;">
+        <h2>📋 Chấm công & Tính lương</h2>
+        <p style="color:#64748b;">Vui lòng đăng nhập bằng Google để tiếp tục</p>
+        <button id="googleLoginBtn" style="padding:12px 24px; font-size:15px; border-radius:8px; border:1px solid #cbd5e1; background:#fff; cursor:pointer; display:flex; align-items:center; gap:10px;">
+            <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.3 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3.1l6-6C34.9 5.5 29.8 3.5 24 3.5 12.7 3.5 3.5 12.7 3.5 24S12.7 44.5 24 44.5 44.5 35.3 44.5 24c0-1.2-.1-2.4-.3-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.6 15.9 18.9 13 24 13c3.1 0 5.9 1.2 8 3.1l6-6C34.9 5.5 29.8 3.5 24 3.5c-7.7 0-14.4 4.3-17.7 10.6z"/><path fill="#4CAF50" d="M24 44.5c5.7 0 10.7-1.9 14.6-5.1l-6.7-5.7C29.8 35.1 27 36 24 36c-5.3 0-9.7-3.3-11.3-8l-6.6 5.1C9.5 40.1 16.2 44.5 24 44.5z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.9 2.5-2.5 4.6-4.6 6l6.7 5.7C40.9 36.7 44.5 30.9 44.5 24c0-1.2-.1-2.4-.9-3.5z"/></svg>
+            Đăng nhập bằng Google
+        </button>
+        <p id="loginError" style="color:#ef4444; display:none;"></p>
+        <pre id="debugBox" style="display:none; max-width:90vw; font-size:11px; background:#f1f5f9; border:1px solid #cbd5e1; border-radius:8px; padding:10px; white-space:pre-wrap; word-break:break-all; text-align:left; color:#334155;"></pre>
+    </div>
+
+    <!-- Nội dung chính, chỉ hiện sau khi đăng nhập hợp lệ -->
+    <div id="appContent" style="display:none;">
+
+    <h2>📋 Chấm công & Tính lương <span id="syncStatus" class="sync-status loading">⏳ Đang tải...</span></h2>
+
+    <div class="card">
+        <div class="flex-row">
+            <span class="currency-badge" style="font-size:1rem;">💴 Yên Nhật (¥)</span>
+            <label style="margin-left:16px;">📅 Tháng:</label>
+            <input type="month" id="monthPicker" />
+            <button id="saveBtn" class="success" style="margin-left:auto;">💾 Lưu online</button>
+            <button id="menuToggleBtn" class="menu-toggle-btn" title="Thêm">⋮</button>
+            <input type="file" id="importFileInput" accept="application/json" style="display:none;" />
+        </div>
+
+        <div id="dropdownMenu" class="dropdown-menu">
+            <button id="toggleNightBtn">🌙 Hiện giờ đêm</button>
+            <button id="exportBtn">📥 Tải file sao lưu</button>
+            <button id="importBtn">📤 Khôi phục từ file</button>
+            <button id="clearMonthBtn" class="danger">🗑 Đặt lại tháng</button>
+            <button id="logoutBtn">🚪 Đăng xuất</button>
+        </div>
+
+        <!-- Bảng tham khảo tất cả các ngày trong tháng, dạng lưới như lịch điện thoại -->
+        <div class="month-calendar-wrap">
+            <table class="month-calendar-grid" id="monthCalendarGrid"></table>
+        </div>
+    </div>
+
+    <div id="peopleContainer"></div>
+
+    <!-- Modal chọn người nghỉ cho 1 ngày -->
+    <div id="holidayModal" class="holiday-modal">
+        <div class="holiday-modal-box">
+            <h3 id="holidayModalTitle">Đánh dấu nghỉ</h3>
+            <p style="font-size:13px; color:var(--muted); margin-bottom:10px;">Chọn người nghỉ ngày này (không chọn ai = bỏ đánh dấu):</p>
+            <div id="holidayModalOptions"></div>
+            <div class="holiday-modal-actions">
+                <button id="holidayModalClear" class="danger">🗑 Bỏ đánh dấu</button>
+                <button id="holidayModalCancel" style="background:#f1f5f9; color:#334155; border:1px solid #cbd5e1;">Huỷ</button>
+                <button id="holidayModalSave" class="success">Lưu</button>
+            </div>
+        </div>
+    </div>
+
+    </div><!-- /appContent -->
+
+    <script>
+        // ===== FIREBASE SETUP =====
+        const firebaseConfig = {
+            apiKey: "AIzaSyClH_N33lKhoxaIKEvkSOdycc0I2dfHC2Y",
+            authDomain: "tinhluongsankou.firebaseapp.com",
+            databaseURL: "https://tinhluongsankou-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "tinhluongsankou",
+            storageBucket: "tinhluongsankou.firebasestorage.app",
+            messagingSenderId: "766213435609",
+            appId: "1:766213435609:web:79599fc4abb3c7ebbd0ec8"
+        };
+
+        let firebaseReady = false;
+        try {
+            firebase.initializeApp(firebaseConfig);
+            firebaseReady = true;
+        } catch (e) {
+            console.error("Lỗi khởi tạo Firebase:", e);
+        }
+
+        // ===== AUTH: chỉ các email này mới được vào =====
+        const ALLOWED_EMAILS = [
+            "touanainjp@gmail.com",
+            "dangthitheujp@gmail.com"
+        ];
+
+        const loginScreen = document.getElementById("loginScreen");
+        const appContent = document.getElementById("appContent");
+        const googleLoginBtn = document.getElementById("googleLoginBtn");
+        const loginError = document.getElementById("loginError");
+
+        const showLogin = (msg) => {
+            loginScreen.style.display = "flex";
+            appContent.style.display = "none";
+            if (msg) {
+                loginError.textContent = msg;
+                loginError.style.display = "block";
+            } else {
+                loginError.style.display = "none";
+            }
+        };
+
+        const showApp = () => {
+            loginScreen.style.display = "none";
+            appContent.style.display = "block";
+        };
+
+        const debugBox = document.getElementById("debugBox");
+        const showDebug = (obj) => {
+            debugBox.style.display = "block";
+            debugBox.textContent = typeof obj === "string" ? obj : JSON.stringify(obj, Object.getOwnPropertyNames(obj || {}), 2);
+        };
+
+        googleLoginBtn.addEventListener("click", () => {
+            const provider = new firebase.auth.GoogleAuthProvider();
+            // Ưu tiên dùng popup: với SDK mới (12.18.0), popup dùng cơ chế postMessage giữa
+            // cửa sổ chính và cửa sổ popup, không phụ thuộc vào việc lưu trạng thái xuyên domain
+            // như redirect (vốn đã xác định là nguyên nhân gây lỗi trên máy này).
+            firebase.auth().signInWithPopup(provider).catch((err) => {
+                console.error("Lỗi đăng nhập popup:", err);
+                showDebug({ step: "signInWithPopup lỗi", code: err.code, message: err.message });
+
+                // Nếu popup bị chặn hoặc trình duyệt không hỗ trợ, fallback sang redirect
+                if (err.code === "auth/popup-blocked" || err.code === "auth/operation-not-supported-in-this-environment") {
+                    sessionStorage.setItem("__login_attempted", "1");
+                    firebase.auth().signInWithRedirect(provider).catch((err2) => {
+                        console.error("Lỗi đăng nhập redirect (fallback):", err2);
+                        showLogin("⚠️ Đăng nhập thất bại: " + (err2.message || err2.code || "không rõ lỗi"));
+                        showDebug({ step: "signInWithRedirect (fallback) lỗi", code: err2.code, message: err2.message });
+                    });
+                    return;
+                }
+
+                // Người dùng tự đóng popup hoặc huỷ thì không cần báo lỗi to tát
+                if (err.code !== "auth/cancelled-popup-request" && err.code !== "auth/popup-closed-by-user") {
+                    showLogin("⚠️ Đăng nhập thất bại: " + (err.message || err.code || "không rõ lỗi"));
+                }
+            });
+        });
+
+        // Gắn listener đăng xuất sau khi appContent đã có trong DOM
+        document.addEventListener("DOMContentLoaded", () => {
+            const logoutBtn = document.getElementById("logoutBtn");
+            if (logoutBtn) logoutBtn.addEventListener("click", () => firebase.auth().signOut());
+        });
+
+        let appInitialized = false;
+        let pendingLoginMessage = null;
+
+        // QUAN TRỌNG: phải đợi getRedirectResult() xử lý xong (bắt lỗi nếu có) TRƯỚC KHI
+        // gắn onAuthStateChanged. Nếu gắn song song, onAuthStateChanged(null) có thể chạy
+        // trước và xoá mất thông báo lỗi mà getRedirectResult vừa bắt được.
+        (async () => {
+            const wasLoginAttempted = sessionStorage.getItem("__login_attempted") === "1";
+            sessionStorage.removeItem("__login_attempted");
+
+            try {
+                const result = await firebase.auth().getRedirectResult();
+                if (wasLoginAttempted) {
+                    // Vừa quay về từ redirect Google, ghi lại toàn bộ thông tin để chẩn đoán
+                    showDebug({
+                        step: "getRedirectResult thành công (không lỗi)",
+                        resultUser: result && result.user ? { email: result.user.email, uid: result.user.uid } : null,
+                        resultIsNull: result === null,
+                        currentUserNgay: firebase.auth().currentUser ? firebase.auth().currentUser.email : null,
+                        url: window.location.href
+                    });
+                }
+            } catch (err) {
+                console.error("Lỗi xử lý kết quả đăng nhập:", err);
+                if (err && err.code && err.code !== "auth/no-current-user") {
+                    pendingLoginMessage = "⚠️ Đăng nhập thất bại: " + (err.message || err.code);
+                }
+                if (wasLoginAttempted) {
+                    showDebug({ step: "getRedirectResult báo LỖI", code: err.code, message: err.message });
+                }
+            }
+
+            firebase.auth().onAuthStateChanged(async (user) => {
+                if (!user) {
+                    // Nếu vừa có lý do bị từ chối (email không hợp lệ, hoặc lỗi redirect ở trên),
+                    // hiện thông báo đó ra thay vì màn hình đăng nhập trống trơn.
+                    showLogin(pendingLoginMessage);
+                    pendingLoginMessage = null;
+                    return;
+                }
+                const email = (user.email || "").toLowerCase();
+                const allowed = ALLOWED_EMAILS.map(e => e.toLowerCase()).includes(email);
+                if (!allowed) {
+                    pendingLoginMessage = `⚠️ Tài khoản ${user.email} không có quyền truy cập.`;
+                    firebase.auth().signOut();
+                    return;
+                }
+                showApp();
+                if (!appInitialized) {
+                    appInitialized = true;
+                    await loadFromStorage();
+                    renderMonthCalendar();
+                    renderAll();
+                }
+            });
+        })();
+
+        const setSyncStatus = (mode, text) => {
+            const el = document.getElementById("syncStatus");
+            if (!el) return;
+            el.className = "sync-status " + mode;
+            el.textContent = text;
+        };
+
+        // Định dạng timestamp thành "dd/MM HH:mm" để hiện kèm trạng thái đồng bộ
+        const formatSyncTime = (ts) => {
+            if (!ts) return "";
+            const d = new Date(ts);
+            const pad = (n) => String(n).padStart(2, "0");
+            return `${pad(d.getDate())}/${pad(d.getMonth() + 1)} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+        };
+
+        const num = (v) => {
+            const n = typeof v === "number" ? v : Number.parseFloat(v);
+            return Number.isNaN(n) ? 0 : n;
+        };
+
+        const fmtJPY = (n) => "¥" + Math.round(n).toLocaleString("ja-JP");
+
+        const monthLabel = (m) => {
+            const [y, mo] = m.split("-");
+            return `Tháng ${mo}/${y}`;
+        };
+
+        const getDayOfWeek = (dateStr) => {
+            const parts = dateStr.split("/");
+            const day = Number(parts[0]);
+            const month = Number(parts[1]) - 1;
+            const year = Number(parts[2]);
+            const date = new Date(year, month, day);
+            const days = ["Chủ Nhật", "Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7"];
+            return days[date.getDay()];
+        };
+
+        const isWeekend = (dateStr) => {
+            const thu = getDayOfWeek(dateStr);
+            return thu === "Thứ 7" || thu === "Chủ Nhật";
+        };
+
+        const showToast = (msg, isError) => {
+            const toast = document.createElement("div");
+            toast.className = "toast" + (isError ? " error" : "");
+            toast.textContent = msg;
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 2500);
+        };
+
+        const STORAGE_KEY = "salary_app_data_jpy";
+
+        // Timestamp cloud gần nhất mà thiết bị này biết (cập nhật khi load và khi lưu thành công).
+        // Dùng để phát hiện trường hợp thiết bị khác đã lưu bản mới hơn trong lúc mình đang sửa.
+        let lastKnownTimestamp = 0;
+
+        // ===== SAVE: Firebase (primary) + localStorage (secondary/backup) =====
+        const saveToStorage = async () => {
+            const timestamp = Date.now();
+            const data = { people, currentMonth: getMonth(), holidayMap, timestamp };
+
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+
+            if (!firebaseReady) {
+                setSyncStatus("error", "⚠️ Không có cloud");
+                showToast("⚠️ Chỉ lưu được trên máy này", true);
+                return;
+            }
+
+            // Kiểm tra trước khi ghi: có ai vừa lưu bản mới hơn bản mình đang giữ không
+            setSyncStatus("loading", "⏳ Đang kiểm tra...");
+            try {
+                const checkTimeout = new Promise((_, reject) =>
+                    setTimeout(() => reject({ code: "timeout-check" }), 8000)
+                );
+                const snap = await Promise.race([
+                    firebase.database().ref("salary_data/timestamp").once("value"),
+                    checkTimeout
+                ]);
+                const cloudTimestamp = num(snap.val());
+
+                if (cloudTimestamp && cloudTimestamp > lastKnownTimestamp) {
+                    const reload = confirm(
+                        "⚠️ Có thiết bị khác vừa lưu dữ liệu mới hơn.\n\n" +
+                        "Nếu lưu tiếp bây giờ, bạn sẽ GHI ĐÈ và làm MẤT dữ liệu đó.\n\n" +
+                        "Bấm OK để tải lại trang lấy bản mới nhất (khuyên dùng, bạn sẽ mất thay đổi chưa lưu ở đây).\n" +
+                        "Bấm Cancel để huỷ, tự kiểm tra lại rồi lưu sau."
+                    );
+                    setSyncStatus("error", "⚠️ Đã huỷ lưu để tránh ghi đè");
+                    showToast("⚠️ Đã huỷ lưu, có bản mới hơn trên cloud", true);
+                    if (reload) location.reload();
+                    return;
+                }
+            } catch (e) {
+                console.error("Lỗi kiểm tra cloud trước khi lưu:", e);
+                // Không chặn lưu nếu chỉ lỗi kiểm tra (vd mất mạng tạm thời, hoặc quá thời gian chờ), nhưng cảnh báo
+            }
+
+            setSyncStatus("loading", "⏳ Đang lưu...");
+
+            // Dọn sạch dữ liệu trước khi gửi lên Firebase: loại bỏ mọi giá trị "undefined"
+            // (Firebase không cho phép lưu undefined, và nếu lỡ có sẽ báo lỗi NGAY LẬP TỨC
+            // dạng throw đồng bộ, không phải promise reject - nếu không bọc try/catch đúng chỗ
+            // thì giao diện bị đứng yên ở "Đang lưu..." mãi không rõ lý do).
+            let cleanData;
+            try {
+                cleanData = JSON.parse(JSON.stringify(data));
+            } catch (e) {
+                console.error("Lỗi dọn dữ liệu trước khi lưu:", e);
+                setSyncStatus("error", "⚠️ Dữ liệu lỗi, không lưu được");
+                showToast("⚠️ Dữ liệu có vấn đề, không lưu lên cloud được: " + e.message, true);
+                return;
+            }
+
+            // Thêm giới hạn thời gian 15 giây: nếu Firebase không phản hồi (mất mạng, kẹt kết nối),
+            // báo lỗi rõ ràng thay vì treo mãi ở "Đang lưu..." không biết chuyện gì xảy ra.
+            const timeoutPromise = new Promise((_, reject) =>
+                setTimeout(() => reject({ code: "timeout", message: "Quá 15 giây không phản hồi, có thể do mất mạng" }), 15000)
+            );
+
+            try {
+                await Promise.race([firebase.database().ref("salary_data").set(cleanData), timeoutPromise]);
+                lastKnownTimestamp = timestamp;
+                setSyncStatus("ok", "☁️ Đã đồng bộ lúc " + formatSyncTime(timestamp));
+                showToast("✅ Đã lưu lên cloud!");
+            } catch (err) {
+                console.error("Lỗi lưu Firebase:", err);
+                setSyncStatus("error", "⚠️ Lỗi: " + (err.message || err.code || "không rõ"));
+                showToast("⚠️ Lưu cloud lỗi (" + (err.code || err.message || "không rõ") + "), đã lưu tạm trên máy này", true);
+            }
+        };
+
+        // ===== LOAD: so sánh timestamp Firebase vs localStorage, dùng bản mới nhất =====
+        const loadFromStorage = async () => {
+            let localData = null;
+            const saved = localStorage.getItem(STORAGE_KEY);
+            if (saved) {
+                try { localData = JSON.parse(saved); }
+                catch (e) { console.error("Lỗi đọc localStorage:", e); }
+            }
+
+            let cloudData = null;
+            if (firebaseReady) {
+                try {
+                    const snapshot = await firebase.database().ref("salary_data").once("value");
+                    cloudData = snapshot.val();
+                } catch (e) {
+                    console.error("Lỗi tải dữ liệu cloud:", e);
+                    setSyncStatus("error", "⚠️ Không tải được cloud");
+                }
+            }
+
+            let dataToUse = null;
+            if (cloudData && localData) {
+                dataToUse = (num(cloudData.timestamp) >= num(localData.timestamp)) ? cloudData : localData;
+            } else {
+                dataToUse = cloudData || localData;
+            }
+
+            if (dataToUse) {
+                if (dataToUse.people && Array.isArray(dataToUse.people)) people = dataToUse.people.map(migratePersonMonths);
+                if (dataToUse.currentMonth) monthPicker.value = dataToUse.currentMonth;
+                if (dataToUse.holidayMap && typeof dataToUse.holidayMap === "object") {
+                    holidayMap = normalizeHolidayMap(dataToUse.holidayMap);
+                } else if (dataToUse.holidays && Array.isArray(dataToUse.holidays)) {
+                    // Dữ liệu cũ: mảng ngày nghỉ áp dụng chung cả 2 người -> chuyển sang holidayMap
+                    holidayMap = {};
+                    dataToUse.holidays.forEach(dateStr => {
+                        holidayMap[toHolidayKey(dateStr)] = people.map((_, i) => i);
+                    });
+                }
+            }
+
+            // Ghi nhớ timestamp cloud hiện biết, dùng để phát hiện ghi đè khi lưu sau này
+            lastKnownTimestamp = num(cloudData ? cloudData.timestamp : 0);
+
+            if (cloudData) {
+                setSyncStatus("ok", "☁️ Đã đồng bộ lúc " + formatSyncTime(cloudData.timestamp));
+            } else if (firebaseReady) {
+                setSyncStatus("loading", "☁️ Chưa có dữ liệu cloud");
+            }
+
+            return !!dataToUse;
+        };
+
+        const today = new Date();
+        const currentMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`;
+
+        const defaultDeductions = [
+            { name: "BH Y Tế", rate: 1.5 },
+            { name: "Bảo hiểm hưu trí (Nenkin)", rate: 8 },
+            { name: "BH Thất Nghiệp", rate: 1 }
+        ];
+
+        const defaultOtherDeductions = [
+            { name: "Thuê nhà ở", amount: 0 },
+            { name: "BH đồ đạc", amount: 0 },
+            { name: "Hóa đơn Gas", amount: 0 },
+            { name: "Hóa đơn Điện", amount: 0 },
+            { name: "Hóa đơn Nước", amount: 0 },
+            { name: "Phí tiệc công ty", amount: 0 },
+            { name: "Khấu trừ khác 1", amount: 0 },
+            { name: "Khấu trừ khác 2", amount: 0 }
+        ];
+
+        const defaultTaxRate = 10;
+
+        const defaultMonthConfig = (p) => ({
+            luongCoBan: num(p.luongCoBan),
+            phuCapGio: num(p.phuCapGio),
+            heSoDem: num(p.heSoDem),
+            heSoOTNgay: num(p.heSoOTNgay),
+            heSoOTDem: num(p.heSoOTDem)
+        });
+
+        const createPerson = (name, luongCoBan, phuCapGio, heSoDem, heSoOTNgay, heSoOTDem, phuCapKhac1 = { reason: "", amount: 0 }, phuCapKhac2 = { reason: "", amount: 0 }, deductions = null, taxRate = defaultTaxRate, otherDeductions = null) => {
+            const p = {
+                name,
+                // Các giá trị này chỉ còn dùng làm MẶC ĐỊNH khi tạo tháng mới chưa từng có dữ liệu.
+                // Số liệu thật của từng tháng nằm trong months[thang].config
+                luongCoBan,
+                phuCapGio,
+                heSoDem,
+                heSoOTNgay,
+                heSoOTDem,
+                phuCapKhac1,
+                phuCapKhac2,
+                deductions: deductions || defaultDeductions.map(d => ({ ...d })),
+                taxRate,
+                otherDeductions: otherDeductions || defaultOtherDeductions.map(d => ({ ...d })),
+                months: {}
+            };
+            p.months[currentMonth] = { days: genMonthDays(currentMonth), config: defaultMonthConfig(p) };
+            return p;
+        };
+
+        const genMonthDays = (month) => {
+            const [y, m] = month.split("-").map(Number);
+            const daysInMonth = new Date(y, m, 0).getDate();
+            return Array.from({ length: daysInMonth }, (_, i) => ({
+                date: `${String(i + 1).padStart(2, "0")}/${String(m).padStart(2, "0")}/${y}`,
+                gcn: 0, gcd: 0, tcn: 0, tcd: 0
+            }));
+        };
+
+        // Chuyển dữ liệu tháng cũ (mảng ngày trực tiếp, chưa tách config theo tháng)
+        // sang định dạng mới { days, config }, dùng giá trị hiện tại của người đó làm config cho các tháng cũ.
+        const migratePersonMonths = (p) => {
+            if (!p.months) p.months = {};
+            Object.keys(p.months).forEach((m) => {
+                const val = p.months[m];
+                if (Array.isArray(val)) {
+                    p.months[m] = { days: val, config: defaultMonthConfig(p) };
+                }
+            });
+            return p;
+        };
+
+        // Lấy dữ liệu { days, config } của 1 tháng. Nếu tháng chưa tồn tại, tạo mới và
+        // kế thừa config từ tháng gần nhất đã có (để tháng mới không tự nhiên về 0).
+        const monthOf = (p, month) => {
+            if (!p.months[month]) {
+                const existingMonths = Object.keys(p.months).sort();
+                const latestMonth = existingMonths.length ? existingMonths[existingMonths.length - 1] : null;
+                const inheritedConfig = latestMonth ? { ...p.months[latestMonth].config } : defaultMonthConfig(p);
+                p.months[month] = { days: genMonthDays(month), config: inheritedConfig };
+            }
+            return p.months[month];
+        };
+
+        // Trạng thái hiện/ẩn 2 cột "Giờ công đêm" và "Tăng ca đêm" trong bảng chấm công.
+        // Mặc định ẩn vì ít khi dùng, bấm nút để hiện ra khi cần.
+        let showNightColumns = false;
+
+        // Trạng thái thu gọn/mở của từng mục con bên trong thẻ nhân viên (hệ số lương,
+        // bảng chi tiết lương, khấu trừ). Key dạng "pi-tenmuc". Mặc định = thu gọn (true).
+        let subSectionCollapsed = {};
+        const isSubCollapsed = (key) => subSectionCollapsed[key] !== undefined ? subSectionCollapsed[key] : true;
+
+        // Trạng thái thu gọn/mở rộng từng thẻ nhân viên. Mặc định (chưa có trong object) = thu gọn (true).
+        let collapsedState = {};
+
+        // Ngày nghỉ lễ/nghỉ, lưu riêng theo từng người: { "dd/mm/yyyy": [0, 1] }
+        // Giá trị là mảng chỉ số người (0, 1...) đang nghỉ ngày đó - có thể chỉ 1 người hoặc cả 2.
+        let holidayMap = {};
+
+        // Firebase Realtime Database KHÔNG cho phép dấu "/" trong tên khoá, nên phải đổi
+        // "dd/mm/yyyy" thành "dd-mm-yyyy" khi dùng làm khoá của holidayMap.
+        const toHolidayKey = (dateStr) => dateStr.replace(/\//g, "-");
+
+        // "Khử độc" holidayMap: chuyển mọi key cũ còn dính dấu "/" (dữ liệu lỡ lưu trước khi sửa lỗi)
+        // sang định dạng an toàn "dd-mm-yyyy", để không tái phát lỗi khi lưu lại lên Firebase.
+        const normalizeHolidayMap = (map) => {
+            if (!map || typeof map !== "object") return {};
+            const clean = {};
+            Object.keys(map).forEach(key => {
+                clean[toHolidayKey(key)] = map[key];
+            });
+            return clean;
+        };
+
+        let people = [
+            createPerson("Tanaka Hiroshi", 1200, 200, 25, 135, 180,
+                { reason: "Phụ cấp đi lại", amount: 15000 },
+                { reason: "Phụ cấp ăn trưa", amount: 8000 }
+            ),
+            createPerson("Nguyễn Văn A", 1150, 200, 30, 125, 150,
+                { reason: "Phụ cấp xăng xe", amount: 5000 },
+                { reason: "Phụ cấp ăn trưa", amount: 6000 }
+            )
+        ];
+
+        const peopleContainer = document.getElementById("peopleContainer");
+        const monthPicker = document.getElementById("monthPicker");
+        const clearMonthBtn = document.getElementById("clearMonthBtn");
+        const toggleNightBtn = document.getElementById("toggleNightBtn");
+        const saveBtn = document.getElementById("saveBtn");
+
+        monthPicker.value = currentMonth;
+
+        const getMonth = () => monthPicker.value;
+
+        const fmt = (n) => fmtJPY(n);
+        const fmtDecimal = (n) => {
+            const rounded = Math.round(n * 100) / 100;
+            return "¥" + rounded.toLocaleString("ja-JP", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        };
+
+        const renderAll = () => {
+            const month = getMonth();
+
+            // Ghi nhớ vị trí đang cuộn (trang + từng khung chấm công riêng) trước khi vẽ lại,
+            // để khôi phục ngay sau đó, tránh bị nhảy về đầu mỗi khi nhập xong 1 ô.
+            const savedPageScroll = window.scrollY;
+            const savedTimesheetScrolls = Array.from(document.querySelectorAll(".timesheet-scroll")).map(el => ({
+                top: el.scrollTop,
+                left: el.scrollLeft
+            }));
+
+            peopleContainer.innerHTML = "";
+
+            let grandTotalNet = 0;
+
+            people.forEach((p, pi) => {
+                const monthData = monthOf(p, month);
+                const days = monthData.days;
+                const config = monthData.config;
+                const card = document.createElement("div");
+                card.className = "card";
+
+                const configFields = [
+                    ["luongCoBan", "Lương cơ bản (¥/giờ)"],
+                    ["phuCapGio", "Phụ cấp theo giờ (¥/giờ)"],
+                    ["heSoDem", "Hệ số giờ đêm (+%)"],
+                    ["heSoOTNgay", "Hệ số tăng ca ngày (%)"],
+                    ["heSoOTDem", "Hệ số tăng ca đêm (%)"]
+                ];
+
+                const configHTML = configFields.map(([key, label]) => `
+                    <label>${label}:</label>
+                    <input type="number" value="${config[key]}" data-pi="${pi}" data-key="${key}" class="config-input confirm-input" readonly style="width:100px;" />
+                `).join("");
+
+                const totals = calc(config, days, p.phuCapKhac2?.amount);
+                const salaryCalc = calcSalaryWithDeductions(p, totals.totalSalary);
+                grandTotalNet += salaryCalc.netSalary;
+
+                // ===== Dự tính lương: nhập tay giờ công + tăng ca ngày dự kiến cả tháng,
+                // dùng lại đúng công thức lương + khấu trừ/thuế của bảng thật =====
+                const duKienGioCong = num(config.duKienGioCong);
+                const duKienTangCaNgay = num(config.duKienTangCaNgay);
+                const forecastLuongCoBan = totals.luongGio * duKienGioCong;
+                const forecastPhuCapGio = totals.phuCapGioRate * duKienGioCong;
+                const forecastTangCaNgay = duKienTangCaNgay * totals.baseRate * (num(config.heSoOTNgay) / 100);
+                const forecastDiLai = duKienGioCong > 0 ? 3000 : 0; // ước lượng tối đa vì thường đủ ngày công chuẩn
+                const forecastTotalSalary = forecastLuongCoBan + forecastPhuCapGio + forecastTangCaNgay + forecastDiLai + totals.phuCapKhac2Amount;
+                const forecastCalc = calcSalaryWithDeductions(p, forecastTotalSalary);
+
+                const collapsed = collapsedState[pi] !== undefined ? collapsedState[pi] : true;
+
+                card.innerHTML = `
+                    <div class="person-header" data-pi="${pi}">
+                        <div style="display:flex; align-items:center; gap:8px;">
+                            <span class="toggle-arrow">${collapsed ? "▶" : "▼"}</span>
+                            <span>👤</span>
+                            <input type="text" value="${p.name}" data-pi="${pi}" class="name-input confirm-input" readonly placeholder="Tên nhân viên" />
+                        </div>
+                        <div style="display:flex; align-items:center; gap:8px; margin-top:4px; padding-left:24px;">
+                            <span class="person-summary">💵 ${fmtDecimal(salaryCalc.netSalary)}</span>
+                            <span class="currency-badge">JPY</span>
+                        </div>
+                    </div>
+
+                    <div class="person-body" id="person-body-${pi}" style="display:${collapsed ? "none" : "block"};">
+
+                    <div class="sub-header" data-subkey="${pi}-config">
+                        <span class="toggle-arrow">${isSubCollapsed(pi + "-config") ? "▶" : "▼"}</span>
+                        <span>⚙️ Hệ số lương</span>
+                    </div>
+                    <div class="sub-body" style="display:${isSubCollapsed(pi + "-config") ? "none" : "block"};">
+                        <div class="flex-row" style="margin:12px 0;">${configHTML}</div>
+                    </div>
+
+                    <div class="timesheet-scroll">
+                        <table class="timesheet-table ${showNightColumns ? '' : 'hide-night'}">
+                            <thead>
+                                <tr><th>Ngày</th><th>Giờ công ngày</th><th>Giờ công đêm</th><th>Tăng ca ngày</th><th>Tăng ca đêm</th></tr>
+                            </thead>
+                            <tbody>
+                                ${days.map((d, di) => {
+                                    const thu = getDayOfWeek(d.date);
+                                    const weekend = isWeekend(d.date);
+                                    const isHoliday = (holidayMap[toHolidayKey(d.date)] || []).includes(pi);
+                                    const lockAttr = isHoliday ? "disabled" : "";
+                                    return `
+                                        <tr class="${weekend ? 'weekend' : ''} ${isHoliday ? 'holiday-row' : ''}">
+                                            <td class="date-cell">
+                                                <div class="date-weekday">${thu}${isHoliday ? ' 🚫' : ''}</div>
+                                                <div class="date-full">${d.date}</div>
+                                            </td>
+                                            <td>
+                                                <div class="hour-cell">
+                                                    <input type="text" inputmode="decimal" pattern="[0-9]*[.,]?[0-9]*" value="${d.gcn}" data-pi="${pi}" data-di="${di}" data-field="gcn" class="day-input confirm-input ${num(d.gcn) > 0 ? 'has-value' : ''}" readonly ${lockAttr} />
+                                                    <button type="button" class="half-btn" data-pi="${pi}" data-di="${di}" data-field="gcn" title="Cộng/trừ 0.5 giờ" ${lockAttr}>±.5</button>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <div class="hour-cell">
+                                                    <input type="text" inputmode="decimal" pattern="[0-9]*[.,]?[0-9]*" value="${d.gcd}" data-pi="${pi}" data-di="${di}" data-field="gcd" class="day-input confirm-input ${num(d.gcd) > 0 ? 'has-value' : ''}" readonly ${lockAttr} />
+                                                    <button type="button" class="half-btn" data-pi="${pi}" data-di="${di}" data-field="gcd" title="Cộng/trừ 0.5 giờ" ${lockAttr}>±.5</button>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <div class="hour-cell">
+                                                    <input type="text" inputmode="decimal" pattern="[0-9]*[.,]?[0-9]*" value="${d.tcn}" data-pi="${pi}" data-di="${di}" data-field="tcn" class="day-input confirm-input ${num(d.tcn) > 0 ? 'has-value' : ''}" readonly ${lockAttr} />
+                                                    <button type="button" class="half-btn" data-pi="${pi}" data-di="${di}" data-field="tcn" title="Cộng/trừ 0.5 giờ" ${lockAttr}>±.5</button>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <div class="hour-cell">
+                                                    <input type="text" inputmode="decimal" pattern="[0-9]*[.,]?[0-9]*" value="${d.tcd}" data-pi="${pi}" data-di="${di}" data-field="tcd" class="day-input confirm-input ${num(d.tcd) > 0 ? 'has-value' : ''}" readonly ${lockAttr} />
+                                                    <button type="button" class="half-btn" data-pi="${pi}" data-di="${di}" data-field="tcd" title="Cộng/trừ 0.5 giờ" ${lockAttr}>±.5</button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    `;
+                                }).join("")}
+                            </tbody>
+                            <tfoot>
+                                <tr><td><strong>TỔNG</strong></td><td>${totals.sumGCN}</td><td>${totals.sumGCD}</td><td>${totals.sumTCN}</td><td>${totals.sumTCD}</td></tr>
+                            </tfoot>
+                        </table>
+                    </div>
+
+                    <div class="sub-header" data-subkey="${pi}-detail">
+                        <span class="toggle-arrow">${isSubCollapsed(pi + "-detail") ? "▶" : "▼"}</span>
+                        <span>💰 Bảng xem chi tiết lương</span>
+                    </div>
+                    <div class="sub-body" style="display:${isSubCollapsed(pi + "-detail") ? "none" : "block"};">
+                    <div class="result">
+                        <table>
+                            <tr><td>📅 Ngày công (ngày có phát sinh giờ làm)</td><td>${totals.workingDays} ngày</td></tr>
+                            <tr><td>⏰ Tổng giờ công (ngày + đêm)</td><td>${totals.sumGCN + totals.sumGCD} giờ</td></tr>
+                            <tr class="night-detail-row"><td>🌙 Số giờ làm đêm</td><td>${totals.sumGCD} giờ</td></tr>
+                            <tr class="night-detail-row"><td>🔥 Số giờ tăng ca ngày</td><td>${totals.sumTCN} giờ</td></tr>
+                            <tr class="night-detail-row"><td>🔥 Số giờ tăng ca đêm</td><td>${totals.sumTCD} giờ</td></tr>
+                            <tr><td>Lương cơ bản (lương CB × (giờ công ngày + giờ công đêm))</td><td>${fmtDecimal(totals.luongCoBanTotal)}</td></tr>
+                            <tr><td>Phụ cấp theo giờ (phụ cấp giờ × (giờ công ngày + giờ công đêm))</td><td>${fmtDecimal(totals.phuCapGioTotal)}</td></tr>
+                            <tr><td>Phụ cấp ca đêm ((lương CB + phụ cấp theo giờ) × giờ công đêm × hệ số đêm)</td><td>${fmtDecimal(totals.phuCapCaDemTotal)}</td></tr>
+                            <tr><td>Tăng ca ngày (giờ TC ngày × (lương CB + phụ cấp giờ) × hệ số TC ngày)</td><td>${fmtDecimal(totals.tangCaNgayTotal)}</td></tr>
+                            <tr><td>Tăng ca đêm (giờ TC đêm × (lương CB + phụ cấp giờ) × hệ số TC đêm)</td><td>${fmtDecimal(totals.tangCaDemTotal)}</td></tr>
+                            <tr class="allowance-row">
+                                <td>🚌 Phụ cấp đi lại (tự động: ${fmtDecimal(totals.travelRatePerDay)} × ${totals.workingDays} ngày công, tối đa ¥3,000)</td>
+                                <td>${fmtDecimal(totals.phuCapDiLaiTotal)}</td>
+                            </tr>
+                            <tr class="allowance-row">
+                                <td><input type="text" value="${p.phuCapKhac2.reason}" data-pi="${pi}" data-key="phuCapKhac2Reason" class="allowance-reason confirm-input" readonly placeholder="Lý do phụ cấp khác" /></td>
+                                <td><input type="number" value="${p.phuCapKhac2.amount}" data-pi="${pi}" data-key="phuCapKhac2Amount" class="allowance-amount confirm-input" readonly placeholder="Số tiền" /></td>
+                            </tr>
+                            <tr style="font-weight:800; background:var(--primary-soft);"><td>TỔNG LƯƠNG</td><td>${fmtDecimal(totals.totalSalary)}</td></tr>
+                        </table>
+                    </div>
+                    </div>
+
+                    <div class="sub-header" data-subkey="${pi}-deduction">
+                        <span class="toggle-arrow">${isSubCollapsed(pi + "-deduction") ? "▶" : "▼"}</span>
+                        <span>🔻 Các khoản khấu trừ & Thuế</span>
+                    </div>
+                    <div class="sub-body" style="display:${isSubCollapsed(pi + "-deduction") ? "none" : "block"};">
+                    <div class="deduction">
+                        <table>
+                            ${p.deductions.map((d, di) => `
+                                <tr class="deduction-row">
+                                    <td>${d.name}</td>
+                                    <td><input type="number" step="0.1" value="${d.rate}" data-pi="${pi}" data-di="${di}" class="deduction-rate confirm-input" readonly /> %</td>
+                                    <td>${fmtDecimal(salaryCalc.bhxhAmounts[di])}</td>
+                                </tr>
+                            `).join("")}
+                            <tr class="deduction-subtotal"><td>Tổng trừ BHXH</td><td></td><td>${fmtDecimal(salaryCalc.totalBHXH)}</td></tr>
+                            <tr class="tax-row">
+                                <td>Thuế thu nhập cá nhân</td>
+                                <td><input type="number" step="0.1" value="${p.taxRate}" data-pi="${pi}" class="tax-rate confirm-input" readonly /> %</td>
+                                <td>${fmtDecimal(salaryCalc.taxAmount)}</td>
+                            </tr>
+                            ${p.otherDeductions.map((d, odi) => `
+                                <tr class="other-deduction-row">
+                                    <td><input type="text" value="${d.name}" data-pi="${pi}" data-odi="${odi}" data-field="name" class="other-deduction-name confirm-input" readonly /></td>
+                                    <td></td>
+                                    <td><input type="number" value="${d.amount}" data-pi="${pi}" data-odi="${odi}" data-field="amount" class="other-deduction-amount confirm-input" readonly /></td>
+                                </tr>
+                            `).join("")}
+                            <tr class="total-deduction-row"><td>🔻 Tổng số tiền khấu trừ</td><td></td><td>${fmtDecimal(salaryCalc.grandTotalDeductions)}</td></tr>
+                            <tr class="net-salary"><td>💵 THỰC LÃNH</td><td></td><td>${fmtDecimal(salaryCalc.netSalary)}</td></tr>
+                        </table>
+                    </div>
+                    </div>
+
+                    <div class="sub-header" data-subkey="${pi}-forecast">
+                        <span class="toggle-arrow">${isSubCollapsed(pi + "-forecast") ? "▶" : "▼"}</span>
+                        <span>📈 Dự tính lương</span>
+                    </div>
+                    <div class="sub-body" style="display:${isSubCollapsed(pi + "-forecast") ? "none" : "block"};">
+                    <div class="flex-row" style="margin:12px 0;">
+                        <label>Giờ công dự kiến (cả tháng):</label>
+                        <input type="number" value="${config.duKienGioCong || 0}" data-pi="${pi}" data-key="duKienGioCong" class="config-input confirm-input" readonly style="width:100px;" />
+                        <label>Giờ tăng ca ngày dự kiến (cả tháng):</label>
+                        <input type="number" value="${config.duKienTangCaNgay || 0}" data-pi="${pi}" data-key="duKienTangCaNgay" class="config-input confirm-input" readonly style="width:100px;" />
+                    </div>
+                    <div class="result">
+                        <table>
+                            <tr><td>Lương cơ bản dự kiến</td><td>${fmtDecimal(forecastLuongCoBan)}</td></tr>
+                            <tr><td>Phụ cấp theo giờ dự kiến</td><td>${fmtDecimal(forecastPhuCapGio)}</td></tr>
+                            <tr><td>Tăng ca ngày dự kiến</td><td>${fmtDecimal(forecastTangCaNgay)}</td></tr>
+                            <tr class="allowance-row"><td>🚌 Phụ cấp đi lại (ước lượng tối đa)</td><td>${fmtDecimal(forecastDiLai)}</td></tr>
+                            <tr class="allowance-row"><td>${p.phuCapKhac2.reason || "Phụ cấp khác"}</td><td>${fmtDecimal(totals.phuCapKhac2Amount)}</td></tr>
+                            <tr style="font-weight:800; background:var(--primary-soft);"><td>TỔNG LƯƠNG DỰ KIẾN</td><td>${fmtDecimal(forecastTotalSalary)}</td></tr>
+                            <tr class="deduction-subtotal"><td>Tổng trừ BHXH (dự kiến)</td><td>${fmtDecimal(forecastCalc.totalBHXH)}</td></tr>
+                            <tr class="tax-row"><td>Thuế TNCN (dự kiến)</td><td>${fmtDecimal(forecastCalc.taxAmount)}</td></tr>
+                            <tr class="total-deduction-row"><td>🔻 Tổng khấu trừ (dự kiến)</td><td>${fmtDecimal(forecastCalc.grandTotalDeductions)}</td></tr>
+                            <tr class="net-salary"><td>💵 THỰC LÃNH DỰ KIẾN</td><td>${fmtDecimal(forecastCalc.netSalary)}</td></tr>
+                        </table>
+                    </div>
+                    </div>
+                    </div><!-- /person-body -->
+                `;
+
+                peopleContainer.appendChild(card);
+            });
+
+            const grandTotalCard = document.createElement("div");
+            grandTotalCard.className = "grand-total-card";
+            grandTotalCard.innerHTML = `
+                <span class="label">💵 TỔNG LƯƠNG THỰC LÃNH (đã trừ tất cả) — ${people.length} người</span>
+                <span class="value">${fmtDecimal(grandTotalNet)}</span>
+            `;
+            peopleContainer.insertBefore(grandTotalCard, peopleContainer.firstChild);
+
+            attachEvents();
+
+            // Khôi phục lại đúng vị trí đang cuộn như trước khi render
+            document.querySelectorAll(".timesheet-scroll").forEach((el, i) => {
+                if (savedTimesheetScrolls[i]) {
+                    el.scrollTop = savedTimesheetScrolls[i].top;
+                    el.scrollLeft = savedTimesheetScrolls[i].left;
+                }
+            });
+            window.scrollTo(0, savedPageScroll);
+
+            // Cập nhật lại bảng lịch tháng (màu ngày đã chấm đủ, ngày nghỉ lễ) theo dữ liệu mới nhất
+            renderMonthCalendar();
+        };
+
+        function calc(config, days, phuCapKhac2Amount) {
+            const luongGio = num(config.luongCoBan);
+            const phuCapGioRate = num(config.phuCapGio);
+            const heSoDem = num(config.heSoDem) / 100;
+            const heSoOTNgay = num(config.heSoOTNgay) / 100;
+            const heSoOTDem = num(config.heSoOTDem) / 100;
+
+            let sumGCN = 0, sumGCD = 0, sumTCN = 0, sumTCD = 0;
+            let workingDays = 0;
+
+            days.forEach(d => {
+                const gcn = num(d.gcn);
+                const gcd = num(d.gcd);
+                const tcn = num(d.tcn);
+                const tcd = num(d.tcd);
+
+                sumGCN += gcn;
+                sumGCD += gcd;
+                sumTCN += tcn;
+                sumTCD += tcd;
+
+                if (gcn > 0 || gcd > 0 || tcn > 0 || tcd > 0) workingDays++;
+            });
+
+            const totalWorkHours = sumGCN + sumGCD;
+            const baseRate = luongGio + phuCapGioRate;
+
+            const luongCoBanTotal = luongGio * totalWorkHours;
+            const phuCapGioTotal = phuCapGioRate * totalWorkHours;
+            const phuCapCaDemTotal = baseRate * sumGCD * heSoDem;
+            const tangCaNgayTotal = sumTCN * baseRate * heSoOTNgay;
+            const tangCaDemTotal = sumTCD * baseRate * heSoOTDem;
+
+            // Phụ cấp đi lại: 3000¥ tối đa / 20 ngày chuẩn (trừ T7, CN) = 150¥/ngày công, nhân số ngày thực đi làm, không quá 3000¥
+            const TRAVEL_ALLOWANCE_MAX = 3000;
+            const TRAVEL_ALLOWANCE_STANDARD_DAYS = 20;
+            const travelRatePerDay = TRAVEL_ALLOWANCE_MAX / TRAVEL_ALLOWANCE_STANDARD_DAYS;
+            const phuCapDiLaiTotal = Math.min(travelRatePerDay * workingDays, TRAVEL_ALLOWANCE_MAX);
+
+            const phuCapKhac2AmountFinal = num(phuCapKhac2Amount || 0);
+
+            const totalSalary = luongCoBanTotal + phuCapGioTotal + phuCapCaDemTotal + tangCaNgayTotal + tangCaDemTotal + phuCapDiLaiTotal + phuCapKhac2AmountFinal;
+
+            return {
+                sumGCN, sumGCD, sumTCN, sumTCD,
+                workingDays,
+                luongGio,
+                phuCapGioRate,
+                baseRate,
+                heSoDemPercent: num(config.heSoDem),
+                luongCoBanTotal,
+                phuCapGioTotal,
+                phuCapCaDemTotal,
+                tangCaNgayTotal,
+                tangCaDemTotal,
+                travelRatePerDay,
+                phuCapDiLaiTotal,
+                phuCapKhac2Amount: phuCapKhac2AmountFinal,
+                totalSalary
+            };
+        }
+
+        function calcSalaryWithDeductions(p, totalSalary) {
+            const bhxhAmounts = p.deductions.map(d => totalSalary * num(d.rate) / 100);
+            const totalBHXH = bhxhAmounts.reduce((sum, a) => sum + a, 0);
+            const taxableIncome = totalSalary - totalBHXH;
+            const taxRate = num(p.taxRate) / 100;
+            const taxAmount = taxableIncome * taxRate;
+            const otherDeductionsTotal = (p.otherDeductions || []).reduce((sum, d) => sum + num(d.amount), 0);
+            const grandTotalDeductions = totalBHXH + taxAmount + otherDeductionsTotal;
+            const netSalary = totalSalary - grandTotalDeductions;
+            return { bhxhAmounts, totalBHXH, taxableIncome, taxAmount, otherDeductionsTotal, grandTotalDeductions, netSalary };
+        }
+
+        function attachEvents() {
+            // Bấm vào phần đầu thẻ (mũi tên, icon, tên) để thu gọn/mở rộng nội dung chi tiết.
+            // Bấm đúng vào ô tên vẫn cho sửa tên bình thường (không bị chặn bởi việc thu gọn).
+            document.querySelectorAll(".person-header").forEach(header => {
+                header.addEventListener("click", (e) => {
+                    if (e.target.closest(".name-input")) return;
+                    const pi = Number(header.dataset.pi);
+                    const current = collapsedState[pi] !== undefined ? collapsedState[pi] : true;
+                    collapsedState[pi] = !current;
+                    renderAll();
+                });
+            });
+
+            // Bấm tiêu đề mục con (Hệ số lương / Bảng chi tiết lương / Khấu trừ) để mở/đóng riêng từng mục
+            document.querySelectorAll(".sub-header").forEach(header => {
+                header.addEventListener("click", () => {
+                    const key = header.dataset.subkey;
+                    subSectionCollapsed[key] = !isSubCollapsed(key);
+                    renderAll();
+                });
+            });
+
+            // Bắt buộc xác nhận trước khi được phép nhập/sửa bất kỳ ô dữ liệu nào.
+            // Dùng sự kiện "click" (không dùng mousedown/touchstart): trình duyệt tự động
+            // KHÔNG bắn click nếu ngón tay/chuột có di chuyển đáng kể (tức đang cuộn/kéo bảng),
+            // chỉ bắn click khi chạm-thả (hoặc bấm-thả) đúng tại chỗ — nên không còn hỏi nhầm khi kéo.
+            document.querySelectorAll(".confirm-input").forEach(inp => {
+                inp.addEventListener("click", function (e) {
+                    if (this.readOnly) {
+                        if (confirm("Bạn có chắc muốn nhập/thay đổi số liệu này không?")) {
+                            this.readOnly = false;
+                            this.focus();
+                            // Xóa trống nếu đang là 0 (nhập nhanh không cần xóa tay),
+                            // hoặc bôi đen toàn bộ nếu có giá trị khác (gõ số mới sẽ ghi đè luôn).
+                            if (this.value === "0") {
+                                this.value = "";
+                            } else {
+                                this.select();
+                            }
+                        } else {
+                            this.blur();
+                        }
+                    }
+                });
+            });
+
+            document.querySelectorAll(".name-input").forEach(inp => {
+                inp.addEventListener("change", (e) => {
+                    const pi = Number(e.target.dataset.pi);
+                    people[pi].name = e.target.value || "Chưa đặt tên";
+                    renderAll();
+                });
+            });
+
+            document.querySelectorAll(".config-input").forEach(inp => {
+                inp.addEventListener("change", (e) => {
+                    const pi = Number(e.target.dataset.pi);
+                    const key = e.target.dataset.key;
+                    const month = getMonth();
+                    const monthData = monthOf(people[pi], month);
+                    monthData.config[key] = Number(e.target.value) || 0;
+                    renderAll();
+                });
+            });
+
+            document.querySelectorAll(".day-input").forEach(inp => {
+                inp.addEventListener("change", (e) => {
+                    const pi = Number(e.target.dataset.pi);
+                    const di = Number(e.target.dataset.di);
+                    const field = e.target.dataset.field;
+                    const month = getMonth();
+                    const monthData = monthOf(people[pi], month);
+                    // Hiểu cả dấu phẩy (,) như dấu chấm (.) vì 1 số bàn phím di động chỉ có dấu phẩy
+                    const rawValue = String(e.target.value).replace(",", ".");
+                    monthData.days[di][field] = Number(rawValue) || 0;
+                    renderAll();
+                });
+            });
+
+            // Nút ±.5: cộng/trừ 0.5 giờ trực tiếp, không cần gõ dấu chấm/phẩy trên bàn phím
+            // (một số bàn phím di động không có dấu chấm dù đã bật inputmode=decimal).
+            document.querySelectorAll(".half-btn").forEach(btn => {
+                btn.addEventListener("click", () => {
+                    const pi = Number(btn.dataset.pi);
+                    const di = Number(btn.dataset.di);
+                    const field = btn.dataset.field;
+                    const month = getMonth();
+                    const monthData = monthOf(people[pi], month);
+                    const current = num(monthData.days[di][field]);
+                    const hasHalf = Math.abs((current % 1) - 0.5) < 0.001;
+                    // Đang có .5 thì bấm để bỏ .5 (làm tròn xuống), chưa có thì bấm để cộng thêm .5
+                    monthData.days[di][field] = hasHalf ? Math.floor(current) : current + 0.5;
+                    renderAll();
+                });
+            });
+
+            document.querySelectorAll("[data-key='phuCapKhac2Reason']").forEach(inp => {
+                inp.addEventListener("change", (e) => { people[Number(e.target.dataset.pi)].phuCapKhac2.reason = e.target.value; renderAll(); });
+            });
+            document.querySelectorAll("[data-key='phuCapKhac2Amount']").forEach(inp => {
+                inp.addEventListener("change", (e) => { people[Number(e.target.dataset.pi)].phuCapKhac2.amount = Number(e.target.value) || 0; renderAll(); });
+            });
+
+            document.querySelectorAll(".deduction-rate").forEach(inp => {
+                inp.addEventListener("change", (e) => {
+                    const pi = Number(e.target.dataset.pi);
+                    const di = Number(e.target.dataset.di);
+                    people[pi].deductions[di].rate = Number(e.target.value) || 0;
+                    renderAll();
+                });
+            });
+
+            document.querySelectorAll(".tax-rate").forEach(inp => {
+                inp.addEventListener("change", (e) => { people[Number(e.target.dataset.pi)].taxRate = Number(e.target.value) || 0; renderAll(); });
+            });
+
+            document.querySelectorAll(".other-deduction-name").forEach(inp => {
+                inp.addEventListener("change", (e) => { people[Number(e.target.dataset.pi)].otherDeductions[Number(e.target.dataset.odi)].name = e.target.value; renderAll(); });
+            });
+            document.querySelectorAll(".other-deduction-amount").forEach(inp => {
+                inp.addEventListener("change", (e) => { people[Number(e.target.dataset.pi)].otherDeductions[Number(e.target.dataset.odi)].amount = Number(e.target.value) || 0; renderAll(); });
+            });
+        }
+
+        // Vẽ bảng tham khảo tất cả các ngày trong tháng đang chọn, có thứ, T7/CN tô đỏ
+        // Kiểm tra 1 ngày đã được CẢ 2 người chấm công (có giờ > 0) hay chưa
+        const isDayFullyChecked = (dateStr) => {
+            const month = getMonth();
+            return people.length > 0 && people.every(p => {
+                const monthData = monthOf(p, month);
+                const dayObj = monthData.days.find(d => d.date === dateStr);
+                if (!dayObj) return false;
+                const total = num(dayObj.gcn) + num(dayObj.gcd) + num(dayObj.tcn) + num(dayObj.tcd);
+                return total > 0;
+            });
+        };
+
+        const renderMonthCalendar = () => {
+            const month = getMonth();
+            const [y, m] = month.split("-").map(Number);
+            const daysInMonth = new Date(y, m, 0).getDate();
+            const firstWeekday = new Date(y, m - 1, 1).getDay(); // 0 = Chủ Nhật
+
+            const today = new Date();
+            const isToday = (day) => today.getFullYear() === y && today.getMonth() === m - 1 && today.getDate() === day;
+
+            const weekdayLabels = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
+            let html = "<thead><tr>" + weekdayLabels.map((w, i) =>
+                `<th class="${i === 0 || i === 6 ? 'weekend-col' : ''}">${w}</th>`
+            ).join("") + "</tr></thead><tbody>";
+
+            let day = 1;
+            const totalCells = firstWeekday + daysInMonth;
+            const totalRows = Math.ceil(totalCells / 7);
+
+            for (let row = 0; row < totalRows; row++) {
+                html += "<tr>";
+                for (let col = 0; col < 7; col++) {
+                    const cellIndex = row * 7 + col;
+                    if (cellIndex < firstWeekday || day > daysInMonth) {
+                        html += `<td class="empty-day">·</td>`;
+                    } else {
+                        const dateStr = `${String(day).padStart(2, "0")}/${String(m).padStart(2, "0")}/${y}`;
+                        const weekend = col === 0 || col === 6;
+                        const todayClass = isToday(day) ? "today-cell" : "";
+                        const weekendClass = weekend ? "weekend-day" : "";
+                        const offPeople = holidayMap[toHolidayKey(dateStr)] || [];
+                        const isFullHoliday = offPeople.length > 0 && offPeople.length === people.length;
+                        const isPartialHoliday = offPeople.length > 0 && offPeople.length < people.length;
+                        const fullyChecked = isDayFullyChecked(dateStr);
+                        const holidayClass = isFullHoliday ? "holiday-cell" : (isPartialHoliday ? "holiday-partial-cell" : "");
+                        const checkedClass = (offPeople.length === 0 && fullyChecked) ? "checked-cell" : "";
+                        html += `<td class="${weekendClass} ${todayClass} ${holidayClass} ${checkedClass}" data-date="${dateStr}">${day}</td>`;
+                        day++;
+                    }
+                }
+                html += "</tr>";
+            }
+            html += "</tbody>";
+
+            const grid = document.getElementById("monthCalendarGrid");
+            if (grid) {
+                grid.innerHTML = html;
+                // Bấm vào 1 ngày để mở hộp thoại chọn người nghỉ ngày đó
+                grid.querySelectorAll("td[data-date]").forEach(cell => {
+                    cell.addEventListener("click", () => openHolidayModal(cell.dataset.date));
+                });
+            }
+        };
+
+        // ===== Hộp thoại chọn người nghỉ cho 1 ngày cụ thể =====
+        const holidayModal = document.getElementById("holidayModal");
+        const holidayModalTitle = document.getElementById("holidayModalTitle");
+        const holidayModalOptions = document.getElementById("holidayModalOptions");
+        let holidayModalDate = null;
+
+        const openHolidayModal = (dateStr) => {
+            holidayModalDate = dateStr;
+            holidayModalTitle.textContent = `Đánh dấu nghỉ ngày ${dateStr}`;
+            const offPeople = holidayMap[toHolidayKey(dateStr)] || [];
+            holidayModalOptions.innerHTML = people.map((p, pi) => `
+                <label class="holiday-check-row">
+                    <input type="checkbox" class="holiday-check" data-pi="${pi}" ${offPeople.includes(pi) ? "checked" : ""} />
+                    <span>${p.name || "Nhân viên " + (pi + 1)}</span>
+                </label>
+            `).join("");
+            holidayModal.style.display = "flex";
+        };
+
+        const closeHolidayModal = () => {
+            holidayModal.style.display = "none";
+            holidayModalDate = null;
+        };
+
+        document.getElementById("holidayModalCancel").addEventListener("click", closeHolidayModal);
+        document.getElementById("holidayModalClear").addEventListener("click", () => {
+            if (holidayModalDate) delete holidayMap[toHolidayKey(holidayModalDate)];
+            closeHolidayModal();
+            renderMonthCalendar();
+            renderAll();
+        });
+        document.getElementById("holidayModalSave").addEventListener("click", () => {
+            if (!holidayModalDate) return;
+            const checked = Array.from(holidayModalOptions.querySelectorAll(".holiday-check:checked"))
+                .map(inp => Number(inp.dataset.pi));
+            if (checked.length === 0) {
+                delete holidayMap[toHolidayKey(holidayModalDate)];
+            } else {
+                holidayMap[toHolidayKey(holidayModalDate)] = checked;
+            }
+            closeHolidayModal();
+            renderMonthCalendar();
+            renderAll();
+        });
+        // Bấm ra ngoài hộp thoại (nền mờ) để đóng
+        holidayModal.addEventListener("click", (e) => {
+            if (e.target === holidayModal) closeHolidayModal();
+        });
+
+        // Menu dropdown (⋮): mở/đóng khi bấm nút, tự đóng khi bấm ra ngoài hoặc chọn 1 mục
+        const menuToggleBtn = document.getElementById("menuToggleBtn");
+        const dropdownMenu = document.getElementById("dropdownMenu");
+        menuToggleBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            dropdownMenu.classList.toggle("open");
+        });
+        document.addEventListener("click", (e) => {
+            if (dropdownMenu.classList.contains("open") && !dropdownMenu.contains(e.target) && e.target !== menuToggleBtn) {
+                dropdownMenu.classList.remove("open");
+            }
+        });
+        dropdownMenu.querySelectorAll("button").forEach(btn => {
+            btn.addEventListener("click", () => dropdownMenu.classList.remove("open"));
+        });
+
+        monthPicker.addEventListener("change", () => { renderMonthCalendar(); renderAll(); });
+        toggleNightBtn.addEventListener("click", () => {
+            showNightColumns = !showNightColumns;
+            toggleNightBtn.textContent = showNightColumns ? "🌙 Ẩn giờ đêm" : "🌙 Hiện giờ đêm";
+            renderAll();
+        });
+        clearMonthBtn.addEventListener("click", () => {
+            const month = getMonth();
+            if (confirm(`Đặt lại chấm công ${monthLabel(month)} về 0?`)) {
+                people = people.map(p => {
+                    const monthData = monthOf(p, month);
+                    return { ...p, months: { ...p.months, [month]: { days: genMonthDays(month), config: monthData.config } } };
+                });
+                renderAll();
+            }
+        });
+        saveBtn.addEventListener("click", saveToStorage);
+
+        // ===== XUẤT FILE SAO LƯU (JSON) =====
+        // Tải toàn bộ dữ liệu (mọi người, mọi tháng) về máy dưới dạng file JSON.
+        // Dùng để tự lưu vào Google Drive/OneDrive/USB... phòng khi Firebase lỗi hoặc file HTML bị lộ.
+        const exportBtn = document.getElementById("exportBtn");
+        exportBtn.addEventListener("click", () => {
+            const data = { people, currentMonth: getMonth(), holidayMap, timestamp: Date.now() };
+            const json = JSON.stringify(data, null, 2);
+            const blob = new Blob([json], { type: "application/json" });
+            const url = URL.createObjectURL(blob);
+
+            const now = new Date();
+            const pad = (n) => String(n).padStart(2, "0");
+            const fileName = `sao_luu_luong_${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}.json`;
+
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = fileName;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+
+            showToast("✅ Đã tải file sao lưu, hãy lưu vào Google Drive/OneDrive để an toàn");
+        });
+
+        // ===== KHÔI PHỤC TỪ FILE SAO LƯU =====
+        const importBtn = document.getElementById("importBtn");
+        const importFileInput = document.getElementById("importFileInput");
+
+        importBtn.addEventListener("click", () => importFileInput.click());
+
+        importFileInput.addEventListener("change", (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (evt) => {
+                try {
+                    const data = JSON.parse(evt.target.result);
+                    if (!data.people || !Array.isArray(data.people)) {
+                        alert("⚠️ File không đúng định dạng sao lưu của app này.");
+                        return;
+                    }
+                    const ok = confirm(
+                        "⚠️ Khôi phục sẽ THAY THẾ toàn bộ dữ liệu đang xem trên màn hình (chưa đụng đến bản trên cloud).\n\n" +
+                        "Sau khi khôi phục, kiểm tra lại số liệu rồi tự bấm 'Lưu online' nếu muốn đồng bộ lên cloud.\n\n" +
+                        "Tiếp tục khôi phục từ file này?"
+                    );
+                    if (!ok) { importFileInput.value = ""; return; }
+
+                    people = data.people.map(migratePersonMonths);
+                    if (data.currentMonth) monthPicker.value = data.currentMonth;
+                    if (data.holidayMap && typeof data.holidayMap === "object") {
+                        holidayMap = normalizeHolidayMap(data.holidayMap);
+                    } else if (data.holidays && Array.isArray(data.holidays)) {
+                        holidayMap = {};
+                        data.holidays.forEach(dateStr => {
+                            holidayMap[toHolidayKey(dateStr)] = people.map((_, i) => i);
+                        });
+                    }
+                    renderAll();
+                    renderMonthCalendar();
+                    showToast("✅ Đã khôi phục từ file. Kiểm tra lại rồi bấm 'Lưu online' nếu cần.");
+                } catch (err) {
+                    console.error("Lỗi đọc file sao lưu:", err);
+                    alert("⚠️ Không đọc được file này, có thể file bị hỏng hoặc sai định dạng.");
+                } finally {
+                    importFileInput.value = "";
+                }
+            };
+            reader.readAsText(file);
+        });
+    </script>
+</body>
+</html>
